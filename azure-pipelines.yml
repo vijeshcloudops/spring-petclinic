@@ -44,10 +44,13 @@ steps:
 
 
 # Step 3: Build and test
+
 - script: |
     chmod +x ./mvnw
-    ./mvnw -B clean verify sonar:sonar
+    ./mvnw -B clean verify \
+      org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar
   displayName: 'Build, test and analyse Spring PetClinic'
+
 
 # Publish Sonarqube results
 - task: SonarQubePublish@8
