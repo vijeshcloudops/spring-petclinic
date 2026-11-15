@@ -22,19 +22,14 @@ variables:
 # 4. Pipeline steps
 steps:
 
-# Step 1: Install Java
-- task: JavaToolInstaller@0
-  displayName: 'Install Java 17'
-  inputs:
-    versionSpec: '$(javaVersion)'
-    jdkArchitectureOption: 'x64'
-    jdkSourceOption: 'PreInstalled'
-
-# Step 2: Verify Java
+# Verify java Installation
 - script: |
+    echo "Checking Java installation"
     java -version
-    echo "Java installation verified"
-  displayName: 'Verify Java installation'
+    javac -version
+    echo "JAVA_HOME=$JAVA_HOME"
+    mvn -version
+  displayName: 'Verify Java and Maven'
 
 
 # Sonarqube 
