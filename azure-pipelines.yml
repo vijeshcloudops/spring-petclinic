@@ -13,7 +13,7 @@ trigger:
 
 # 2. Build agent
 pool:
-  vmImage: ubuntu-24.04
+  name: myagent
 
 # 3. Pipeline variables
 variables:
@@ -36,12 +36,29 @@ steps:
     echo "Java installation verified"
   displayName: 'Verify Java installation'
 
+
+# Sonarqube 
+- task: SonarQubePrepare@8
+  displayName: 'Prepare SonarQube Analysis'
+  inputs:
+    SonarQube: 'sonarqube-petclinic'
+    scannerMode: 'other'
+    extraProperties: |
+      sonar.projectKey=spring-petclinic
+      sonar.projectName=Spring PetClinic
+
+
 # Step 3: Build and test
 - script: |
     chmod +x ./mvnw
-    ./mvnw -B clean verify
-  displayName: 'Build and test Spring PetClinic'
+    ./mvnw -B clean verify sonar:sonar
+  displayName: 'Build, test and analyse Spring PetClinic'
 
+# Publish Sonarqube results
+- task: SonarQubePublish@8
+  displayName: 'Publish SonarQube Quality Gate'
+  inputs:
+    pollingTimeoutSec: '300'
 
 # Step 4: Copy generated JAR
 - task: CopyFiles@2
