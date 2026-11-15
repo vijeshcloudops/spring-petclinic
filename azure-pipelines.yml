@@ -1,0 +1,48 @@
+# 1. Trigger
+trigger:
+  branches:
+    include:
+      - main
+
+# 2. Build agent
+pool:
+  vmImage: ubuntu-latest
+
+# 3. Pipeline variables
+variables:
+  javaVersion: '17'
+
+# 4. Pipeline steps
+steps:
+
+# Step 1: Install Java
+- task: JavaToolInstaller@0
+  displayName: 'Install Java 17'
+  inputs:
+    versionSpec: '$(javaVersion)'
+    jdkArchitectureOption: 'x64'
+    jdkSourceOption: 'PreInstalled'
+
+# Step 2: Verify Java
+- script: |
+    java -version
+    echo "Java installation verified"
+  displayName: 'Verify Java installation'
+
+# Step 3: Build and test
+- script: |
+    chmod +x ./mvnw
+    ./mvnw -B clean verify
+  displayName: 'Build and test Spring PetClinic'
+
+# Step 4: Publish test results
+- task: PublishTestResults@2
+  displayName: 'Publish JUnit test results'
+  condition: succeededOrFailed()
+  inputs:
+    testResultsFormat: 'JUnit'
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+    searchFolder: '$(System.DefaultWorkingDirectory)'
+    mergeTestResults: true
+    failTaskOnFailedTests: true
+    testRunTitle: 'Spring PetClinic Tests'
