@@ -6,7 +6,7 @@ trigger:
 
 # 2. Build agent
 pool:
-  vmImage: ubuntu-latest
+  vmImage: ubuntu-24.04
 
 # 3. Pipeline variables
 variables:
