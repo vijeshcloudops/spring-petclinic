@@ -3,6 +3,13 @@ trigger:
   branches:
     include:
       - main
+  paths:
+    include:
+      - src/**
+      - pom.xml
+      - mvnw
+      - .mvn/**
+      - azure-pipelines.yml
 
 # 2. Build agent
 pool:
@@ -34,6 +41,24 @@ steps:
     chmod +x ./mvnw
     ./mvnw -B clean verify
   displayName: 'Build and test Spring PetClinic'
+
+
+# Step 4: Copy generated JAR
+- task: CopyFiles@2
+  displayName: 'Copy application JAR'
+  inputs:
+    SourceFolder: '$(System.DefaultWorkingDirectory)'
+    Contents: '**/target/*.jar'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+
+# Step 5: Publish JAR as pipeline artifact
+- task: PublishPipelineArtifact@1
+  displayName: 'Publish PetClinic JAR'
+  inputs:
+    targetPath: '$(Build.ArtifactStagingDirectory)'
+    artifact: 'petclinic-jar'
+    publishLocation: 'pipeline'
+
 
 # Step 4: Publish test results
 - task: PublishTestResults@2
