@@ -39,8 +39,8 @@ steps:
     SonarQube: 'sonarqube-petclinic'
     scannerMode: 'other'
     extraProperties: |
-      sonar.projectKey=Spring-PetClinic
-      sonar.projectName=Spring-PetClinic
+      sonar.projectKey=Spring-Petclinic
+      sonar.projectName=Spring-Petclinic
 
 
 # Step 3: Build and test
