@@ -86,3 +86,20 @@ steps:
     mergeTestResults: true
     failTaskOnFailedTests: true
     testRunTitle: 'Spring PetClinic Tests'
+
+
+
+# Build and push Docker image to Azure Container Registry
+- task: Docker@2
+  displayName: 'Build and push PetClinic image to ACR'
+  inputs:
+    command: 'buildAndPush'
+    containerRegistry: 'acr-petclinic'
+    repository: 'petclinic'
+    Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+    buildContext: '$(Build.SourcesDirectory)'
+    tags: |
+      $(Build.SourceVersion)
+
+
+
