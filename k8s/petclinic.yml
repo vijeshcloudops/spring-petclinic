@@ -1,3 +1,4 @@
+
 ---
 apiVersion: v1
 kind: Service
@@ -30,12 +31,26 @@ spec:
     spec:
       containers:
         - name: workload
-          image: vijesh89/spring-petclinic:latest
+          image: vijesh89/spring-petclinic:v2
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: postgres
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: demo-db
+                  key: username
+
+            - name: POSTGRES_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: demo-db
+                  key: password
+
             - name: SERVICE_BINDING_ROOT
               value: /bindings
+
             - name: SPRING_APPLICATION_JSON
               value: |
                 {
