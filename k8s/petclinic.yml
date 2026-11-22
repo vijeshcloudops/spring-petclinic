@@ -4,6 +4,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: petclinic
+  namespace: petclinic
 spec:
   type: NodePort
   ports:
@@ -17,6 +18,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: petclinic
+  namespace: petclinic
   labels:
     app: petclinic
 spec:
@@ -31,7 +33,7 @@ spec:
     spec:
       containers:
         - name: workload
-          image: vijesh89/spring-petclinic:v2
+          image: acrspringpetclinic123.azurecr.io/petclinic:placeholder
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: postgres
