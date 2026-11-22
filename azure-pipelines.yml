@@ -1,4 +1,7 @@
-# 1. Trigger
+
+# ============================================================
+# 1. TRIGGER
+# ============================================================
 trigger:
   branches:
     include:
@@ -9,97 +12,218 @@ trigger:
       - pom.xml
       - mvnw
       - .mvn/**
+      - Dockerfile
+      - k8s/**
       - azure-pipelines.yml
 
-# 2. Build agent
+# ============================================================
+# 2. BUILD AGENT
+# ============================================================
 pool:
   name: myagent
 
-# 3. Pipeline variables
+# ============================================================
+# 3. PIPELINE VARIABLES
+# ============================================================
 variables:
   javaVersion: '17'
+  acrName: 'acrspringpetclinic123'
+  acrLoginServer: 'acrspringpetclinic123.azurecr.io'
+  imageRepository: 'petclinic'
+  aksResourceGroup: 'rg-petclinic-dev'
+  aksClusterName: 'aks-petclinic-dev'
+  kubernetesNamespace: 'petclinic'
 
-# 4. Pipeline steps
-steps:
+# ============================================================
+# 4. STAGE 1 - CI: BUILD, TEST, ANALYSE AND PUSH IMAGE
+# ============================================================
+stages:
 
-# Verify java Installation
-- script: |
-    echo "Checking Java installation"
-    java -version
-    javac -version
-    echo "JAVA_HOME=$JAVA_HOME"
-    mvn -version
-  displayName: 'Verify Java and Maven'
+- stage: CI
+  displayName: 'CI - Build, Test and Push Image'
 
+  jobs:
+  - job: BuildAndPush
+    displayName: 'Build and Push PetClinic'
 
-# Sonarqube 
-- task: SonarQubePrepare@8
-  displayName: 'Prepare SonarQube Analysis'
-  inputs:
-    SonarQube: 'sonarqube-petclinic'
-    scannerMode: 'other'
-    extraProperties: |
-      sonar.projectKey=Spring-Petclinic
-      sonar.projectName=Spring-Petclinic
+    steps:
 
+    # Verify Java and Maven
+    - script: |
+        echo "Checking Java installation"
+        java -version
+        javac -version
+        echo "JAVA_HOME=$JAVA_HOME"
+        mvn -version
+      displayName: 'Verify Java and Maven'
 
-# Step 3: Build and test
+    # Prepare SonarQube
+    - task: SonarQubePrepare@8
+      displayName: 'Prepare SonarQube Analysis'
+      inputs:
+        SonarQube: 'sonarqube-petclinic'
+        scannerMode: 'other'
+        extraProperties: |
+          sonar.projectKey=Spring-Petclinic
+          sonar.projectName=Spring-Petclinic
 
-- script: |
-    chmod +x ./mvnw
-    ./mvnw -B clean verify \
-      org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar
-  displayName: 'Build, test and analyse Spring PetClinic'
+    # Build, test and analyse
+    - script: |
+        chmod +x ./mvnw
+        ./mvnw -B clean verify \
+          org.sonarsource.scanner.maven:sonar-maven-plugin:5.2.0.4988:sonar
+      displayName: 'Build, test and analyse Spring PetClinic'
 
+    # Publish SonarQube results
+    - task: SonarQubePublish@8
+      displayName: 'Publish SonarQube Quality Gate'
+      inputs:
+        pollingTimeoutSec: '300'
 
-# Publish Sonarqube results
-- task: SonarQubePublish@8
-  displayName: 'Publish SonarQube Quality Gate'
-  inputs:
-    pollingTimeoutSec: '300'
+    # Copy generated JAR
+    - task: CopyFiles@2
+      displayName: 'Copy application JAR'
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)'
+        Contents: '**/target/*.jar'
+        TargetFolder: '$(Build.ArtifactStagingDirectory)'
 
-# Step 4: Copy generated JAR
-- task: CopyFiles@2
-  displayName: 'Copy application JAR'
-  inputs:
-    SourceFolder: '$(System.DefaultWorkingDirectory)'
-    Contents: '**/target/*.jar'
-    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+    # Publish JAR artifact
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish PetClinic JAR'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: 'petclinic-jar'
+        publishLocation: 'pipeline'
 
-# Step 5: Publish JAR as pipeline artifact
-- task: PublishPipelineArtifact@1
-  displayName: 'Publish PetClinic JAR'
-  inputs:
-    targetPath: '$(Build.ArtifactStagingDirectory)'
-    artifact: 'petclinic-jar'
-    publishLocation: 'pipeline'
+    # Publish test results
+    - task: PublishTestResults@2
+      displayName: 'Publish JUnit test results'
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        searchFolder: '$(System.DefaultWorkingDirectory)'
+        mergeTestResults: true
+        failTaskOnFailedTests: true
+        testRunTitle: 'Spring PetClinic Tests'
 
+    # Build and push Docker image to ACR
+    - task: Docker@2
+      displayName: 'Build and push PetClinic image to ACR'
+      inputs:
+        command: 'buildAndPush'
+        containerRegistry: 'acr-petclinic'
+        repository: '$(imageRepository)'
+        Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+        buildContext: '$(Build.SourcesDirectory)'
+        tags: |
+          $(Build.SourceVersion)
 
-# Step 4: Publish test results
-- task: PublishTestResults@2
-  displayName: 'Publish JUnit test results'
-  condition: succeededOrFailed()
-  inputs:
-    testResultsFormat: 'JUnit'
-    testResultsFiles: '**/surefire-reports/TEST-*.xml'
-    searchFolder: '$(System.DefaultWorkingDirectory)'
-    mergeTestResults: true
-    failTaskOnFailedTests: true
-    testRunTitle: 'Spring PetClinic Tests'
+# ============================================================
+# 5. STAGE 2 - CD: DEPLOY TO AKS
+# ============================================================
 
+- stage: CD
+  displayName: 'CD - Deploy to AKS'
+  dependsOn: CI
+  condition: succeeded()
 
+  jobs:
+  - deployment: DeployPetClinic
+    displayName: 'Deploy PetClinic to AKS'
+    environment: 'petclinic-dev'
 
-# Build and push Docker image to Azure Container Registry
-- task: Docker@2
-  displayName: 'Build and push PetClinic image to ACR'
-  inputs:
-    command: 'buildAndPush'
-    containerRegistry: 'acr-petclinic'
-    repository: 'petclinic'
-    Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
-    buildContext: '$(Build.SourcesDirectory)'
-    tags: |
-      $(Build.SourceVersion)
+    strategy:
+      runOnce:
+        deploy:
+          steps:
 
+          # Authenticate and deploy to AKS
+          - task: AzureCLI@2
+            displayName: 'Deploy application to AKS'
+            inputs:
+              azureSubscription: 'azure-aks-petclinic'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
 
+                set -euo pipefail
 
+                echo "Installing kubectl and kubelogin"
+
+                az aks install-cli \
+                  --install-location "$(Agent.TempDirectory)/kubectl" \
+                  --kubelogin-install-location "$(Agent.TempDirectory)/kubelogin"
+
+                export PATH="$(Agent.TempDirectory):$PATH"
+
+                echo "Retrieving AKS credentials"
+
+                az aks get-credentials \
+                  --resource-group "$(aksResourceGroup)" \
+                  --name "$(aksClusterName)" \
+                  --overwrite-existing
+
+                echo "Configuring Kubernetes authentication"
+
+                kubelogin convert-kubeconfig -l azurecli
+
+                echo "Checking access to PetClinic namespace"
+
+                kubectl get namespace "$(kubernetesNamespace)"
+
+                echo "Deploying PostgreSQL resources"
+
+                kubectl apply -f "$(Build.SourcesDirectory)/k8s/db.yaml" \
+                  -n "$(kubernetesNamespace)"
+
+                echo "Waiting for PostgreSQL rollout"
+
+                kubectl rollout status deployment/demo-db \
+                  -n "$(kubernetesNamespace)" \
+                  --timeout=180s
+
+                echo "Preparing immutable application image"
+
+                IMAGE_TAG="$(Build.SourceVersion)"
+                IMAGE="$(acrLoginServer)/$(imageRepository):${IMAGE_TAG}"
+
+                echo "Image to deploy: ${IMAGE}"
+
+                MANIFEST="$(Build.SourcesDirectory)/k8s/petclinic.yaml"
+                DEPLOY_MANIFEST="$(Agent.TempDirectory)/petclinic-deploy.yaml"
+
+                PLACEHOLDER="$(acrLoginServer)/$(imageRepository):placeholder"
+
+                if ! grep -qF "${PLACEHOLDER}" "${MANIFEST}"; then
+                  echo "ERROR: Expected image placeholder not found in petclinic.yaml"
+                  exit 1
+                fi
+
+                sed "s|${PLACEHOLDER}|${IMAGE}|g" \
+                  "${MANIFEST}" > "${DEPLOY_MANIFEST}"
+
+                echo "Deploying PetClinic application"
+
+                kubectl apply -f "${DEPLOY_MANIFEST}" \
+                  -n "$(kubernetesNamespace)"
+
+                echo "Waiting for PetClinic rollout"
+
+                kubectl rollout status deployment/petclinic \
+                  -n "$(kubernetesNamespace)" \
+                  --timeout=300s
+
+                echo "Checking deployed resources"
+
+                kubectl get deployments \
+                  -n "$(kubernetesNamespace)"
+
+                kubectl get pods \
+                  -n "$(kubernetesNamespace)"
+
+                kubectl get services \
+                  -n "$(kubernetesNamespace)"
+
+                echo "PetClinic deployment completed successfully"
